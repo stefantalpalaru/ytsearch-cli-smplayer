@@ -4,14 +4,19 @@ set -e
 
 echo "📦 Installing ytsearch..."
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BIN_SRC="$SCRIPT_DIR/bin/ytsearch"
-LIB_SRC="$SCRIPT_DIR/lib"
+TMP_DIR=$(mktemp -d)
+REPO_URL="https://github.com/bhavesh-7/ytsearch-cli.git"
+
+echo "📥 Cloning repo..."
+git clone --depth=1 "$REPO_URL" "$TMP_DIR"
+
+BIN_SRC="$TMP_DIR/bin/ytsearch"
+LIB_SRC="$TMP_DIR/lib"
 
 BIN_TARGET="/usr/local/bin/ytsearch"
 LIB_TARGET="/usr/local/lib/ytsearch"
 
-echo "🚚 Copying to $BIN_TARGET..."
+echo "🚚 Installing to $BIN_TARGET..."
 sudo install -Dm755 "$BIN_SRC" "$BIN_TARGET"
 
 echo "📁 Installing libraries to $LIB_TARGET..."
