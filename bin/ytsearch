@@ -1,0 +1,122 @@
+#!/bin/bash
+
+ytsearch() {
+  local query="$*"
+  if [[ -z "$query" ]]; then
+    read -p "Enter your YouTube search query: " query
+  fi
+
+  local per_page=5
+  local offset=0
+  local titles=()
+  local ids=()
+  local selection=""
+
+  echo -e "🔍 Searching YouTube for: \"$query\"\n"
+
+  while true; do
+    # Fetch results
+    mapfile -t batch < <(yt-dlp "ytsearch$((offset + per_page)):$query" \
+      --flat-playlist \
+      --print "%(title)s|||%(id)s" 2>/dev/null)
+
+    batch=("${batch[@]:$offset}")
+
+    if [[ ${#batch[@]} -eq 0 ]]; then
+      echo "❌ No more results."
+      break
+    fi
+
+    for line in "${batch[@]}"; do
+      title="${line%%|||*}"
+      id="${line##*|||}"
+      titles+=("$title")
+      ids+=("$id")
+    done
+
+    result_list=()
+    for ((i = 0; i < ${#titles[@]}; i++)); do
+      result_list+=("$((i + 1)). ${titles[$i]}")
+    done
+    result_list+=("[m] More results")
+    result_list+=("[q] Quit")
+
+    selection=$(printf "%s\n" "${result_list[@]}" | fzf --height 40% --border --ansi --preview "echo {}")
+
+    if [[ "$selection" == "[q] Quit" ]]; then
+      echo "👋 Exiting."
+      break
+    elif [[ "$selection" == "[m] More results" ]]; then
+      offset=$((offset + per_page))
+      continue
+    fi
+
+    if [[ "$selection" =~ ^([0-9]+)\. ]]; then
+      index="${BASH_REMATCH[1]}"
+      video_id="${ids[$((index - 1))]}"
+    else
+      echo "❌ Invalid selection."
+      continue
+    fi
+
+    local url="https://www.youtube.com/watch?v=$video_id"
+
+    echo -e "\nPlay [v]ideo or [a]udio only?"
+    read -r mode
+
+    if [[ "$mode" == "a" ]]; then
+      echo "🎧 Streaming best available audio..."
+      stream_url=$(yt-dlp -f 'bestaudio' -g "$url" 2>/dev/null)
+      if [[ -z "$stream_url" ]]; then
+        echo "❌ Failed to get audio stream URL."
+        continue
+      fi
+      mpv --no-video "$stream_url"
+    else
+      echo "📺 Fetching available video formats..."
+      mapfile -t formats < <(
+        yt-dlp -F "$url" 2>/dev/null | awk '
+        BEGIN {
+            FS = " +";
+            printf "%-6s │ %-4s │ %-9s │ %-4s │ %-10s │ %-7s │ %-6s │ %s\n", "ID", "EXT", "RES", "FPS", "SIZE", "BITRATE", "PROTO", "VCODEC"
+            print "───────────────────────────────────────────────────────────────────────────────────────────────"
+        }
+        /^[0-9]+/ && /video only/ {
+            id=$1
+            ext=$2
+            res=$3
+            fps=$4
+            size=$5
+            tbr=$6
+            proto=$7
+            vcodec=$(NF)
+            printf "%-6s │ %-4s │ %-9s │ %-4s │ %-10s │ %-7s │ %-6s │ %s\n", id, ext, res, fps, size, tbr, proto, vcodec
+        }'
+      )
+
+      if [[ ${#formats[@]} -eq 0 ]]; then
+        echo "❌ No video-only formats found."
+        continue
+      fi
+      selected=$(printf "%s\n" "${formats[@]}" |
+        fzf --height=50% --reverse --prompt="Select video quality: " \
+          --preview "echo {}" --border --header-lines=2)
+
+      if [[ "$selected" =~ ^([0-9]+) ]]; then
+        format_id="${BASH_REMATCH[1]}"
+        echo "⏳ Streaming selected format (ID: $format_id) with best audio..."
+        if ! yt-dlp -f "${format_id}+bestaudio" -o - "$url" | mpv -; then
+          echo "⚠️  Failed to stream combined video+audio. Trying fallback..."
+          fallback_url=$(yt-dlp -f best -g "$url" 2>/dev/null)
+          [[ -n "$fallback_url" ]] && mpv "$fallback_url"
+        fi
+      else
+        echo "❌ Invalid format selected."
+        continue
+      fi
+    fi
+    break
+  done
+}
+
+ytsearch "$@"
