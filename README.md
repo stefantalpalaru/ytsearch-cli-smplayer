@@ -8,9 +8,7 @@ stream quality selection to [SMPlayer](https://www.smplayer.info/)
 ## Features
 
 - Search YouTube videos from your terminal
-- Stream audio-only with `bestaudio`
-- Select video quality from a clean table
-- Stream selected video+audio format via `smplayer`
+- Stream selected video via `smplayer`
 
 ## Requirements
 
@@ -21,11 +19,7 @@ stream quality selection to [SMPlayer](https://www.smplayer.info/)
 
 ## Usage
 ```bash
-ytsearch "search term"
-```
-Example:
-```bash
-ytsearch lofi chill
+ytsearch "search terms"
 ```
 
 ## License
